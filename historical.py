@@ -1,3 +1,4 @@
+from dateutil.parser import *
 import sqlite3
 import csv
 
@@ -18,8 +19,12 @@ class HistoricalDB:
         self.cursor.executemany("INSERT INTO Bitcoin(date, avg, max, min) VALUES (?,?,?,?)", array_tuple)
         self.conn.commit()
 
-    def select_bitcoin(self, date_range):
+    def select_bitcoin_date(self, date_range):
         self.cursor.execute("SELECT * FROM Bitcoin WHERE date >= ? and date <= ?", date_range)
+        return self.cursor.fetchall()
+
+    def select_bitcoin_all(self):
+        self.cursor.execute("SELECT * FROM Bitcoin")
         return self.cursor.fetchall()
 
     def process_data_bitcoinity(self, file_path):
@@ -29,8 +34,12 @@ class HistoricalDB:
         data = []
         next(csv_reader, None)
         for row in csv_reader:
-            data_line = (row[0].strip(' UTC'), row[1], row[2], row[3])
+            data_line = (self.parse_time(row[0]), row[1], row[2], row[3])
             data.append(data_line)
 
         read_file.close()
         self.insert_into_bitcoin(data)
+
+    def parse_time(self, time):
+        new_time = parse(time).replace(microsecond=0).replace(tzinfo=None)
+        return new_time

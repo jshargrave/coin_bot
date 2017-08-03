@@ -13,5 +13,5 @@ file_path = config.get('Data', 'file')
 rebuild = config.get('Data', 'rebuild database')
 
 
-import_data(file_path, rebuild)
+#import_data(file_path, rebuild)
 run_bot(api_key, api_secret)
