@@ -14,5 +14,29 @@ def sma_prediction(db, api, sec=86400):
     # retrieving all data in database
     all_select = db.select_bitcoin_all()
 
+    # lists used for linear regression
+    sma_x_avg = []
+    sma_x_max = []
+    sma_x_min = []
+    sma_y = []
 
+    all_x_avg = []
+    all_x_max = []
+    all_x_min = []
+    all_y = []
+
+    # populating lists
+    for row in sma_select:
+        sma_x_avg.append(row[2])
+        sma_x_max.append(row[3])
+        sma_x_min.append(row[4])
+        sma_y.append(db.parse_time(row[1]).toordinal())
+
+    for row in all_select:
+        all_x_avg.append(row[2])
+        all_x_max.append(row[3])
+        all_x_min.append(row[4])
+        all_y.append(db.parse_time(row[1]).toordinal())
+
+def linear_regression():
 
