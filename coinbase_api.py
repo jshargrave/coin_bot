@@ -25,5 +25,9 @@ class CoinBaseAPI:
     def get_spot_price(self):
         return self.client.get_spot_price(currency_pair='BTC-USD')
 
+    # default function used to get price data
+    def get_price(self):
+        return self.get_spot_price()
+
     def get_server_time(self):
         return self.client.get_time()

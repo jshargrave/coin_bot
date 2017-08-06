@@ -1,17 +1,23 @@
-from communications import *
-import ConfigParser
-
-config = ConfigParser.RawConfigParser()
-config.read("config.cfg")
-
-# parse config file
-api_key = config.get('API', 'API Key')
-api_secret = config.get('API', 'API Secret')
-
-# get data information
-file_path = config.get('Data', 'file')
-rebuild = config.get('Data', 'rebuild database')
+import config as cfg
+import multiprocessing
+import time
 
 
-#import_data(file_path, rebuild)
-run_bot(api_key, api_secret)
+def main():
+    pool = []
+
+    #p = multiprocessing.Process(target=cfg.DB.retrieve_data, args=(1, ))
+    #pool.append(p)
+    p = multiprocessing.Process(target=cfg.graph_data())
+    pool.append(p)
+
+    for obj in pool:
+        obj.start()
+
+    print('here')
+    time.sleep(10)
+
+
+if __name__ == '__main__':
+    main()
+
