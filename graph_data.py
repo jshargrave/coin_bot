@@ -32,8 +32,10 @@ class GraphChart:
 
                 n = len(all_x)
                 if len(all_x) != 0 and len(all_y) != 0 and len(all_x) == len(all_y):
-                    local_maximums = bd.BotData().calculate_local_max(all_x, all_y, int(n * look_ahead_per) + 1)
-                    local_minimums = bd.BotData().calculate_local_min(all_x, all_y, int(n * look_ahead_per) + 1)
+                    std = bd.BotData().std(bd.BotData().var(sum(all_y)/len(all_y), all_y))
+
+                    local_maximums = bd.BotData().calculate_local_max(all_x, all_y, int(n * look_ahead_per) + 1, std)
+                    local_minimums = bd.BotData().calculate_local_min(all_x, all_y, int(n * look_ahead_per) + 1, std)
                     absolute_max = bd.BotData().find_absolute_max(all_x, all_y)
                     absolute_min = bd.BotData().find_absolute_min(all_x, all_y)
 

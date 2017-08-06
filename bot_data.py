@@ -5,6 +5,7 @@ import bot_api as ba
 import sqlite3
 import csv
 import sys
+import math
 
 
 # dates used in database query should be formatted as "YYYY-MM-DD HH:MM:SS"
@@ -113,12 +114,13 @@ class BotData:
             if interval_time <= now_time:
                 interval_time = now_time + timedelta(minutes=min)
 
-    def calculate_local_max(self, x, y, look_ahead):
+    def calculate_local_max(self, x, y, look_ahead, std):
         n = len(y)
         local_max_x = []
         local_max_y = []
+        mean = sum(y) / len(y)
 
-        # note dont index anything less then 0 and greater than n - 1
+        # note don't index anything less then 0 and greater than n - 1
         i = 0
         while i < n:
             # value to inspect
@@ -131,7 +133,9 @@ class BotData:
                 index = i - l_count - 1
                 if index < 0:
                     break
-                if y[index] > value:
+
+                # if there is a point > than the value or value is not > std + mean, not local max
+                if y[index] > value or value <= mean + std:
                     l_condition = False
                     break
                 l_count += 1
@@ -142,7 +146,9 @@ class BotData:
                 index = i + r_count + 1
                 if index > n - 1:
                     break
-                if y[index] > value:
+
+                # if there is a point > than the value or value is not > std + mean, not local max
+                if y[index] > value or value <= mean + std:
                     r_condition = False
                     break
                 r_count += 1
@@ -156,12 +162,13 @@ class BotData:
 
         return local_max_x, local_max_y
 
-    def calculate_local_min(self, x, y, look_ahead):
+    def calculate_local_min(self, x, y, look_ahead, std):
         n = len(y)
         local_min_x = []
         local_min_y = []
+        mean = sum(y) / len(y)
 
-        # note dont index anything less then 0 and greater than n - 1
+        # note don't index anything less then 0 and greater than n - 1
         i = 0
         while i < n:
             # value to inspect
@@ -174,7 +181,9 @@ class BotData:
                 index = i - l_count - 1
                 if index < 0:
                     break
-                if y[index] < value:
+
+                # if there is a point < than the value or value is not < std - mean, not local min
+                if y[index] < value or value > mean - std:
                     l_condition = False
                     break
                 l_count += 1
@@ -185,7 +194,9 @@ class BotData:
                 index = i + r_count + 1
                 if index > n - 1:
                     break
-                if y[index] < value:
+
+                # if there is a point < than the value or value is not < std - mean, not local min
+                if y[index] < value or value > mean - std:
                     r_condition = False
                     break
                 r_count += 1
@@ -222,3 +233,17 @@ class BotData:
                 min_date = x[i]
 
         return min_date, min_value
+
+    def var(self, mean, data):
+        sum_data = 0
+        n = len(data)
+        for d in data:
+            diff = d - mean
+            sum_data += diff*diff
+        return sum_data/n
+
+    def std(self, var):
+        return math.sqrt(var)
+
+    def remove_outliers(self, data, mean):
+        pass
