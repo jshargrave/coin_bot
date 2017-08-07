@@ -13,63 +13,68 @@ class BotStrategy():
 
     # This function is used to monitor and detect whenever significant changes have occured.  All strategies are
     # called from this function when a significant price has been detected.
-    def monitor_price(self, data_look_back=cfg.MONITOR_DR, refresh=cfg.MONITOR_R, look_ahead_per=cfg.MONITOR_LA_PER):
-        begin_date = bd.BotData().parse_time(str(datetime.utcnow() - timedelta(seconds=data_look_back)))
+    def monitor_price(self, data_lookback=cfg.MONITOR_DR):
+        begin_date = bd.BotData().parse_time(str(datetime.utcnow() - timedelta(seconds=data_lookback)))
         date_range = (begin_date, bd.BotData().parse_time(str(datetime.utcnow())))
-        newest_max = -1, -1
-        newest_min = -1, -1
-        y = []
-        x = []
 
-        interval_time = datetime.utcnow().replace(second=0, microsecond=0)
+        x_hist = []
+        y_hist = []
+        x = []
+        y = []
+
+        minute = datetime.utcnow().minute
         while True:
             # variable used to hold the current time
-            now_time = datetime.utcnow().replace(second=0, microsecond=0)
+            now_min = datetime.utcnow().minute
 
             # checking if interval has completed
-            if interval_time == now_time:
+            if minute == now_min:
+                select_historical = bd.BotData().select_bitcoin_historical(date_range)
                 select = bd.BotData().select_bitcoin_real_time(date_range)
+
+                for row in select_historical:
+                    values = (bd.BotData().parse_time(row[1]), float(row[2]))
+                    y_hist.append(values[1])
+                    x_hist.append(values[0])
 
                 for row in select:
                     values = (bd.BotData().parse_time(row[1]), float(row[2]))
                     y.append(values[1])
                     x.append(values[0])
 
-                n = len(y)
+                n = len(y_hist)
                 if n > 0:
-                    mean = sum(y) / n
-                    std = bd.BotData().std(bd.BotData().var(mean, y))
+                    # mean and std are derived from the historical data
+                    mean = (sum(y_hist)) / n
+                    std = bd.BotData().std(bd.BotData().var(mean, y_hist))
                     price = y[-1]
 
                     # Processing Data
-                    local_maximums = bd.BotData().calculate_local_max(x, y, int(n * look_ahead_per) + 1, std)
-                    local_minimums = bd.BotData().calculate_local_min(x, y, int(n * look_ahead_per) + 1, std)
-                    absolute_max = bd.BotData().find_absolute_max(x, y)
-                    absolute_min = bd.BotData().find_absolute_min(x, y)
+                    print(n)
+                    local_maximums = bd.BotData().calculate_local_max(x_hist + x, y_hist + y, int(n * cfg.MONITOR_LA_PER) + 1, std)
+                    local_minimums = bd.BotData().calculate_local_min(x_hist + x, y_hist + y, int(n * cfg.MONITOR_LA_PER) + 1, std)
+                    absolute_max = bd.BotData().find_absolute_max(x_hist + x, y_hist + y)
+                    absolute_min = bd.BotData().find_absolute_min(x_hist + x, y_hist + y)
 
                     # Graphing data
-                    gd.GraphChart().graph_data(x, y, local_maximums, local_minimums, absolute_max, absolute_min)
+                    gd.GraphChart().graph_data(x_hist + x, y_hist + y, local_maximums, local_minimums, absolute_max, absolute_min, price, mean, std)
 
-                    if newest_max == (-1, -1) and newest_min == (-1, -1):
-                        newest_max = local_maximums[-1]
-                        newest_min = local_minimums[-1]
+                    newest_max = local_maximums[0][0], local_maximums[1][0]
+                    newest_min = local_minimums[0][0], local_minimums[1][0]
 
-                    # Checking for significant changes, and then running strategies
-                    if newest_max != local_maximums[-1] or self.is_price_stable(x, y):
-                        newest_max = local_maximums[-1]
-                        print("Found new local max, running strategies...")
-                        self.potential_gain_strategy(absolute_max, price, "buy")
+                    if self.is_price_stable(newest_max):
+                        pass
 
-                    if newest_min != local_minimums[-1] or self.is_price_stable(x, y):
-                        newest_min = local_minimums[-1]
-                        print("Found new local min, running strategies...")
-                        self.potential_gain_strategy(absolute_max, price, "sell")
+                    if self.is_price_stable(newest_min):
+                        pass
 
             # updating interval_time
-            if interval_time <= now_time:
-                interval_time = now_time + timedelta(minutes=refresh)
-                date_range = (date_range[1], interval_time)
+            if minute <= now_min:
+                minute = (datetime.utcnow() + timedelta(minutes=cfg.MONITOR_R)).minute
+                date_range = (date_range[1], datetime.utcnow() + timedelta(minutes=cfg.MONITOR_R))
 
+            # updating graph
+            gd.GraphChart().update_graph()
 
     # Running average works by computing the running average of a set amount of historical time.  If the average is
     # increasing, we invest.  If the average is decreasing, we sell.
@@ -78,34 +83,44 @@ class BotStrategy():
 
     # The stability approach works by investing only during stable prices.  This is a more long term approach, that
     # assumes prices will stagnate, and then become noising again.
-    def is_price_stable(self, x, y, data_look_back=cfg.STABLE_DR, threshold=cfg.STABLE_T):
-        begin_date = bd.BotData().parse_time(str(datetime.utcnow() - timedelta(seconds=data_look_back)))
-        date_range = (begin_date, bd.BotData().parse_time(str(datetime.utcnow())))
+    def is_price_stable(self, newest_point, data_lookahead=cfg.STABLE_LA, threshold=cfg.STABLE_T):
+        begin_date = newest_point[0]
+        end_date = bd.BotData().parse_time(str(begin_date + timedelta(seconds=data_lookahead)))
+        date_range = (begin_date, end_date)
 
-        x_stable = []
-        y_stable = []
+        x = []
+        y = []
 
-        # removing elements outside of date range
-        for x_obj, y_obj in zip(x, y):
-            if x_obj > date_range[0] or x_obj < date_range[1]:
-                x_stable.append(x_obj)
-                y_stable.append(y_obj)
+        if datetime.utcnow() > begin_date:
+            select_historical = bd.BotData().select_bitcoin_historical(date_range)
+            select = bd.BotData().select_bitcoin_real_time(date_range)
 
-        n = len(y)
-        if n > 0:
-            mean = sum(y) / n
-            std = bd.BotData().std(bd.BotData().var(mean, y))
-            in_std_count = 0.0
+            for row in select_historical:
+                values = (bd.BotData().parse_time(row[1]), float(row[2]))
+                y.append(values[1])
+                x.append(values[0])
 
-            for item in y_stable:
-                if item < mean + std and item > mean - std:
-                    in_std_count += 1
+            for row in select:
+                values = (bd.BotData().parse_time(row[1]), float(row[2]))
+                y.append(values[1])
+                x.append(values[0])
 
-            stability_prob = in_std_count / n
-            print "Stability is %.4f." % stability_prob
-            if stability_prob > threshold:
-                print "Probability of stable price is %.4f." % stability_prob
-                return True
+            n = len(y)
+            if n > 0:
+                mean = sum(y)/n
+                std = bd.BotData().std(bd.BotData().var(mean, y))
+
+                in_std_count = 0
+                for item in y:
+                    if item < mean + std/2 and item > mean - std/2:
+                        in_std_count += 1
+
+                stability_prob = float(in_std_count) / float(n)
+                print "Stability Probability: %.2f" % stability_prob
+                if stability_prob > threshold:
+                    return True
+
+        return False
 
 
     # The potential gain approach works by using the absolute max/min as a proof of concept.  Comparing the current

@@ -4,7 +4,6 @@ import config as cfg
 import bot_api as ba
 import sqlite3
 import csv
-import sys
 import math
 
 
@@ -20,6 +19,47 @@ class BotData:
         self.cursor.execute("CREATE TABLE IF NOT EXISTS BitcoinTrans(id integer PRIMARY KEY, date text NOT NULL, "
                             "amount real NOT NULL, price real NOT NULL)")
 
+    def monitor_data(self, refresh=cfg.BD_MONITOR_R):
+        minute = datetime.utcnow().minute
+        day = datetime.utcnow().day
+
+        while True:
+            # variable used to hold the current time
+            now_min = datetime.utcnow().minute
+            now_day = datetime.utcnow().day
+
+            # daily data
+            if day == now_day:
+                print("Getting historical data and inserting...")
+                historical = ba.CoinBaseAPI(cfg.API_KEY, cfg.API_SECRET).get_historical_prices().prices
+                insert_array = []
+
+                for item in historical:
+                    insert_array.insert(0, (self.parse_time(item.time), float(item.price)))
+
+                self.drop_bitcoin_historical()
+                self.drop_bitcoin_real_time()
+                self.insert_bitcoin_historical(insert_array)
+                print("Completed")
+
+            # real time data
+            if minute == now_min:
+                time_stamp = self.parse_time(str(datetime.utcnow()))
+                insert_array = []
+
+                # insert price
+                price = self.get_coinbase_price()
+                insert_array.append((time_stamp, price))
+                self.insert_bitcoin_real_time(insert_array)
+                print(str(time_stamp), price)
+
+            # updating interval_time
+            if minute <= now_min:
+                minute = (datetime.utcnow() + timedelta(minutes=refresh)).minute
+
+            if day <= now_day:
+                day = (datetime.utcnow() + timedelta(days=1)).day
+
     def rebuild_tables(self):
         print("Clearing all tables...")
         self.cursor.execute("DROP TABLE BitcoinHistorical")
@@ -28,16 +68,26 @@ class BotData:
         self.__init__()
         print("Completed")
 
+    def drop_bitcoin_historical(self):
+        self.cursor.execute("DROP TABLE BitcoinHistorical")
+        self.__init__()
+        print("Dropped BitcoinHistorical table.")
+
+    def drop_bitcoin_real_time(self):
+        self.cursor.execute("DROP TABLE BitcoinRealTime")
+        self.__init__()
+        print("Dropped BitcoinRealTime table.")
+
     # ----------------------------------------------- Insert Commands ------------------------------------------
-    def insert_into_bitcoin_historical(self, array_tuple):
+    def insert_bitcoin_historical(self, array_tuple):
         self.cursor.executemany("INSERT INTO BitcoinHistorical(date, avg) VALUES (?,?)", array_tuple)
         self.conn.commit()
 
-    def insert_into_real_time(self, array_tuple):
+    def insert_bitcoin_real_time(self, array_tuple):
         self.cursor.executemany("INSERT INTO BitcoinRealTime(date, price) VALUES (?,?)", array_tuple)
         self.conn.commit()
 
-    def insert_into_bitcoin_transactions(self, array_tuple):
+    def insert_bitcoin_transactions(self, array_tuple):
         self.cursor.executemany("INSERT INTO BitcoinTrans(date, amount, price) VALUES (?,?,?)", array_tuple)
         self.conn.commit()
 
@@ -51,11 +101,11 @@ class BotData:
         return self.cursor.fetchall()
 
     def select_bitcoin_real_time(self, date_range):
-        select = self.cursor.execute("SELECT * FROM BitcoinRealTime WHERE date >= ? and date <= ?", date_range)
+        self.cursor.execute("SELECT * FROM BitcoinRealTime WHERE date >= ? and date <= ?", date_range)
         return self.cursor.fetchall()
 
     def select_bitcoin_real_time_all(self):
-        select = self.cursor.execute("SELECT * FROM BitcoinRealTime")
+        self.cursor.execute("SELECT * FROM BitcoinRealTime")
         return self.cursor.fetchall()
 
     # -------------------------------------------- Data Processing Functions -----------------------------------
@@ -70,7 +120,7 @@ class BotData:
             data.append(data_line)
 
         read_file.close()
-        self.insert_into_bitcoin_historical(data)
+        self.insert_bitcoin_historical(data)
 
     def process_data_kaggle(self, file_path):
         read_file = open(file_path, 'r')
@@ -86,41 +136,15 @@ class BotData:
             data_line = (str(time_stamp), (float(row[2]) + float(row[3]))/2)
             data.append(data_line)
 
-        self.insert_into_bitcoin_historical(data)
+        self.insert_bitcoin_historical(data)
         read_file.close()
 
     def parse_time(self, time_stamp):
         new_time = parse(time_stamp).replace(microsecond=0).replace(tzinfo=None)
         return new_time
 
-    def retrieve_data(self, min):
-        api_list = [ba.CoinBaseAPI(cfg.API_KEY, cfg.API_SECRET)]
-
-        # initial time_stamp
-        interval_time = datetime.utcnow().replace(second=0, microsecond=0)
-
-        while True:
-            # variable used to hold the current time
-            now_time = datetime.utcnow().replace(second=0, microsecond=0)
-
-            # checking if interval has completed
-            if interval_time == now_time:
-                insert_array = []
-                time_stamp = self.parse_time(str(datetime.utcnow()))
-
-                # getting all prices from api list
-                for api in api_list:
-                    price = float(api.get_price().amount)
-                    insert_array.append((time_stamp, price))
-
-                # inserting values into database
-                self.insert_into_real_time(insert_array)
-                sys.stdout.write('.')
-                sys.stdout.flush()
-
-            # updating interval_time
-            if interval_time <= now_time:
-                interval_time = now_time + timedelta(minutes=min)
+    def get_coinbase_price(self):
+        return float(ba.CoinBaseAPI(cfg.API_KEY, cfg.API_SECRET).get_price().amount)
 
     def calculate_local_max(self, x, y, look_ahead, std):
         n = len(y)
@@ -142,8 +166,8 @@ class BotData:
                 if index < 0:
                     break
 
-                # if there is a point > than the value or value is not > std + mean, not local max
-                if y[index] > value or value <= mean + std:
+                # if there is a point >= than the value or value is not > std + mean, not local max
+                if y[index] >= value or value <= mean + std:
                     l_condition = False
                     break
                 l_count += 1
@@ -155,8 +179,8 @@ class BotData:
                 if index > n - 1:
                     break
 
-                # if there is a point > than the value or value is not > std + mean, not local max
-                if y[index] > value or value <= mean + std:
+                # if there is a point >= than the value or value is not > std + mean, not local max
+                if y[index] >= value or value <= mean + std:
                     r_condition = False
                     break
                 r_count += 1
@@ -190,8 +214,8 @@ class BotData:
                 if index < 0:
                     break
 
-                # if there is a point < than the value or value is not < std - mean, not local min
-                if y[index] < value or value > mean - std:
+                # if there is a point <= than the value or value is not < std - mean, not local min
+                if y[index] <= value or value > mean - std:
                     l_condition = False
                     break
                 l_count += 1
@@ -203,8 +227,8 @@ class BotData:
                 if index > n - 1:
                     break
 
-                # if there is a point < than the value or value is not < std - mean, not local min
-                if y[index] < value or value > mean - std:
+                # if there is a point <= than the value or value is not < std - mean, not local min
+                if y[index] <= value or value > mean - std:
                     r_condition = False
                     break
                 r_count += 1
@@ -253,5 +277,5 @@ class BotData:
     def std(self, var):
         return math.sqrt(var)
 
-    def remove_outliers(self, data, mean):
+    def remove_outliers(self, x, y, mean):
         pass

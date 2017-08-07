@@ -1,10 +1,9 @@
-import graph_data as gd
 import bot_strategy as bs
 from multiprocessing import Process
 
 
 def main():
-    pool = []
+    pool = list()
     pool.append(Process(target=bs.BotStrategy().monitor_price))
 
     for p in pool:
@@ -14,4 +13,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

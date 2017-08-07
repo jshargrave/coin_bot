@@ -1,18 +1,17 @@
 import matplotlib.pyplot as plt
-import bot_data as bd
+import warnings
+import matplotlib.cbook
+warnings.filterwarnings("ignore",category=matplotlib.cbook.mplDeprecation)
 
 
 class GraphChart:
-    def graph_data(self, x, y, local_maximums, local_minimums, absolute_max, absolute_min):
-        mean = sum(y) / len(y)
-        std = bd.BotData().std(bd.BotData().var(mean, y))
+    def graph_data(self, x, y, local_maximums, local_minimums, absolute_max, absolute_min, price, mean, std):
+        # clear entire figure
+        plt.clf()
 
         plt.ion()
         plt.xlabel("Date")
         plt.ylabel("Price")
-
-        # clear entire figure
-        plt.clf()
 
         # plot avg, max, min
         plt.plot(x, y)
@@ -31,7 +30,7 @@ class GraphChart:
 
         plt.annotate(
             "Absolute Min",
-            xy=absolute_min, xytext=(-40, 0),
+            xy=absolute_min, xytext=(100, -5),
             textcoords='offset points', ha='right', va='bottom',
             bbox=dict(boxstyle='round,pad=0.5', fc='yellow', alpha=0.5),
             arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0'))
@@ -42,4 +41,5 @@ class GraphChart:
         plt.axhline(mean - std, color='b')
         plt.gcf().autofmt_xdate()
 
+    def update_graph(self):
         plt.pause(0.05)
