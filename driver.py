@@ -1,23 +1,16 @@
-import config as cfg
-import multiprocessing
-import time
 import graph_data as gd
+import bot_strategy as bs
+from multiprocessing import Process
 
 
 def main():
     pool = []
+    pool.append(Process(target=bs.BotStrategy().monitor_price))
 
-    #p = multiprocessing.Process(target=cfg.DB.retrieve_data, args=(1, ))
-    #pool.append(p)
-    p = multiprocessing.Process(target=gd.GraphChart().real_time_graph(86400, 1, 0.2))
-    pool.append(p)
+    for p in pool:
+        p.start()
 
-    for obj in pool:
-        obj.start()
-
-    print('here')
-    time.sleep(10)
-
+    print("Reached end of main")
 
 if __name__ == '__main__':
     main()

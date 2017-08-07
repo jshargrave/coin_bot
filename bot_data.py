@@ -46,8 +46,16 @@ class BotData:
         self.cursor.execute("SELECT * FROM BitcoinHistorical WHERE date >= ? and date <= ?", date_range)
         return self.cursor.fetchall()
 
+    def select_bitcoin_historical_all(self):
+        self.cursor.execute("SELECT * FROM BitcoinHistorical")
+        return self.cursor.fetchall()
+
     def select_bitcoin_real_time(self, date_range):
-        self.cursor.execute("SELECT * FROM BitcoinRealTime WHERE date >= ? and date <= ?", date_range)
+        select = self.cursor.execute("SELECT * FROM BitcoinRealTime WHERE date >= ? and date <= ?", date_range)
+        return self.cursor.fetchall()
+
+    def select_bitcoin_real_time_all(self):
+        select = self.cursor.execute("SELECT * FROM BitcoinRealTime")
         return self.cursor.fetchall()
 
     # -------------------------------------------- Data Processing Functions -----------------------------------
