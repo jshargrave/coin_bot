@@ -1,7 +1,7 @@
 from ConfigParser import *
 
-min = 60
-hour = min * 60
+minute = 60
+hour = minute * 60
 day = hour * 24
 month = day * 30
 year = day * 365
@@ -20,12 +20,12 @@ FILE_PATH_KAGGLE = config.get('Data', 'kaggle file')
 
 # configuration for strategies
 MONITOR_DR = month * 3      # monitor_data(data_range(sec))
-MONITOR_R = min * 5         # monitor_data(refresh(sec))
+MONITOR_R = minute * 5      # monitor_data(refresh(sec))
 MONITOR_LA_PER = 0.20       # monitor_data(look_ahead_per(float))
 MONITOR_SED = 10            # monitor_data(stable_end_date(sec))
 
 STABLE_T = 0.8              # is_price_stable(threshold)
-STABLE_LA = hour            # is_price_stable(data_lookahead)
+STABLE_LA = day            # is_price_stable(data_lookahead)
 
 POTENTIAL_GP = 0.2          # potential_gain_strategy(gain_per)
 
@@ -33,6 +33,6 @@ POTENTIAL_GP = 0.2          # potential_gain_strategy(gain_per)
 BD_MONITOR_R = 1            # monitor_data(refresh)
 
 # configuration for bot data
-
+POI_TL = day * 5
 
 # ----------------------------------------------------------------------------------------------------------------

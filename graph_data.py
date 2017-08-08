@@ -5,7 +5,7 @@ warnings.filterwarnings("ignore",category=matplotlib.cbook.mplDeprecation)
 
 
 class GraphChart:
-    def graph_data(self, x, y, local_maximums, local_minimums, absolute_max, absolute_min, price, mean, std):
+    def graph_data(self, x, y, mean, std, local_maximums=([], []), local_minimums=([], []), absolute_max=(), absolute_min=()):
         # clear entire figure
         plt.clf()
 
@@ -40,6 +40,21 @@ class GraphChart:
         plt.axhline(mean + std, color='b')
         plt.axhline(mean - std, color='b')
         plt.gcf().autofmt_xdate()
+
+    def normal_graph(self, x, y, mean, std):
+        plt.xlabel("Date")
+        plt.ylabel("Price")
+
+        # plot avg, max, min
+        plt.plot(x, y)
+
+        # draw mean, mean + std, and mean - std
+        plt.axhline(mean, color='r')
+        plt.axhline(mean + std, color='b')
+        plt.axhline(mean - std, color='b')
+        plt.gcf().autofmt_xdate()
+
+        plt.show()
 
     def update_graph(self):
         plt.pause(0.05)
