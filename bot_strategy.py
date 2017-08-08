@@ -3,6 +3,7 @@ import bot_trade as bt
 import graph_data as gd
 from datetime import *
 import config as cfg
+import copy
 
 
 class BotStrategy():
@@ -10,6 +11,43 @@ class BotStrategy():
         self._buy_vote = 0
         self._sell_vote = 0
 
+    def monitor_price_simulator(self):
+        #bd.BotData().rebuild_tables()
+        #bd.BotData().process_data_kaggle(cfg.FILE_PATH_KAGGLE)
+        begin_date = bd.BotData().parse_time(str(datetime.utcnow() - timedelta(days=365)))
+
+        select_historical = bd.BotData().cursor.execute('SELECT * FROM BitcoinHistorical WHERE date <= ?', (begin_date, )).fetchall()
+        select = bd.BotData().cursor.execute("SELECT * FROM BitcoinHistorical WHERE date > ?", (begin_date, )).fetchall()
+
+        x_hist = []
+        y_hist = []
+        x = []
+        y = []
+
+        print("Reading historical data")
+        # getting historical data
+        for row in select_historical:
+            values = (row[1], float(row[2]))
+            y_hist.append(values[1])
+            x_hist.append(values[0])
+
+        all_x = copy.deepcopy(x_hist)
+        all_y = copy.deepcopy(y_hist)
+        print("Starting simulation")
+        for row in select:
+
+            values = (row[1], float(row[2]))
+            y.append(values[1])
+            x.append(values[0])
+            all_y.append(values[1])
+            all_x.append(values[0])
+
+            n = len(y_hist)
+            if n > 0:
+                # mean and std are derived from the historical data
+                mean = (sum(y_hist)) / n
+                std = bd.BotData().std(bd.BotData().var(mean, y_hist))
+                price = y[-1]
 
     # This function is used to monitor and detect whenever significant changes have occured.  All strategies are
     # called from this function when a significant price has been detected.
@@ -22,13 +60,13 @@ class BotStrategy():
         x = []
         y = []
 
-        minute = datetime.utcnow().minute
+        interval_time = datetime.utcnow()
         while True:
             # variable used to hold the current time
-            now_min = datetime.utcnow().minute
+            time = datetime.utcnow()
 
             # checking if interval has completed
-            if minute == now_min:
+            if time >= interval_time:
                 select_historical = bd.BotData().select_bitcoin_historical(date_range)
                 select = bd.BotData().select_bitcoin_real_time(date_range)
 
@@ -50,11 +88,12 @@ class BotStrategy():
                     price = y[-1]
 
                     # Processing Data
-                    print(n)
-                    local_maximums = bd.BotData().calculate_local_max(x_hist + x, y_hist + y, int(n * cfg.MONITOR_LA_PER) + 1, std)
-                    local_minimums = bd.BotData().calculate_local_min(x_hist + x, y_hist + y, int(n * cfg.MONITOR_LA_PER) + 1, std)
-                    absolute_max = bd.BotData().find_absolute_max(x_hist + x, y_hist + y)
-                    absolute_min = bd.BotData().find_absolute_min(x_hist + x, y_hist + y)
+                    poi = bd.BotData().find_poi(x_hist + x, y_hist + y, cfg.day * 5, mean, std)
+                    local_maximums = poi[0]
+                    local_minimums = poi[1]
+
+                    absolute_max = poi[2]
+                    absolute_min = poi[3]
 
                     # Graphing data
                     gd.GraphChart().graph_data(x_hist + x, y_hist + y, local_maximums, local_minimums, absolute_max, absolute_min, price, mean, std)
@@ -62,19 +101,21 @@ class BotStrategy():
                     newest_max = local_maximums[0][0], local_maximums[1][0]
                     newest_min = local_minimums[0][0], local_minimums[1][0]
 
-                    if self.is_price_stable(newest_max):
-                        pass
-
-                    if self.is_price_stable(newest_min):
-                        pass
+                    self.price_logic(newest_max, absolute_max, price, "sell")
+                    self.price_logic(newest_min, absolute_max, price, "buy")
 
             # updating interval_time
-            if minute <= now_min:
-                minute = (datetime.utcnow() + timedelta(minutes=cfg.MONITOR_R)).minute
-                date_range = (date_range[1], datetime.utcnow() + timedelta(minutes=cfg.MONITOR_R))
+            if time >= interval_time:
+                interval_time = datetime.utcnow() + timedelta(seconds=cfg.MONITOR_R)
+                date_range = (date_range[1], interval_time)
 
             # updating graph
             gd.GraphChart().update_graph()
+
+    def price_logic(self, newest_point, absolute_max, price, method):
+        if self.is_price_stable(newest_point):
+            self.potential_gain_strategy(absolute_max, price, method)
+
 
     # Running average works by computing the running average of a set amount of historical time.  If the average is
     # increasing, we invest.  If the average is decreasing, we sell.
@@ -91,7 +132,7 @@ class BotStrategy():
         x = []
         y = []
 
-        if datetime.utcnow() > begin_date:
+        if datetime.utcnow() > end_date:
             select_historical = bd.BotData().select_bitcoin_historical(date_range)
             select = bd.BotData().select_bitcoin_real_time(date_range)
 
@@ -112,7 +153,7 @@ class BotStrategy():
 
                 in_std_count = 0
                 for item in y:
-                    if item < mean + std/2 and item > mean - std/2:
+                    if item < mean + std and item > mean - std:
                         in_std_count += 1
 
                 stability_prob = float(in_std_count) / float(n)

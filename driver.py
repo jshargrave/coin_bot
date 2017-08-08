@@ -5,6 +5,7 @@ from multiprocessing import Process
 def main():
     pool = list()
     pool.append(Process(target=bs.BotStrategy().monitor_price))
+    #pool.append(Process(target=bs.BotStrategy().monitor_price_simulator()))
 
     for p in pool:
         p.start()

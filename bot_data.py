@@ -123,148 +123,126 @@ class BotData:
         self.insert_bitcoin_historical(data)
 
     def process_data_kaggle(self, file_path):
+        print("Reading in Kaggle dataset...")
         read_file = open(file_path, 'r')
         csv_reader = csv.reader(read_file)
 
         data = []
+        count = 0
         next(csv_reader, None)
         for row in csv_reader:
             if "NaN" in row:
                 continue
+            count += 1
 
             time_stamp = datetime.utcfromtimestamp(float(row[0]))
             data_line = (str(time_stamp), (float(row[2]) + float(row[3]))/2)
             data.append(data_line)
 
         self.insert_bitcoin_historical(data)
+        print "Completed: %.0f items inserted." % count
         read_file.close()
 
     def parse_time(self, time_stamp):
         new_time = parse(time_stamp).replace(microsecond=0).replace(tzinfo=None)
         return new_time
 
+    def increment_date(self, date, d=0, h=0, s=0, ms=0):
+        return date + timedelta(days=d, hours=h, seconds=s, microseconds=ms)
+
+    def decrement_date(self, date, d=0, h=0, s=0, ms=0):
+        return date - timedelta(days=d, hours=h, seconds=s, microseconds=ms)
+
     def get_coinbase_price(self):
         return float(ba.CoinBaseAPI(cfg.API_KEY, cfg.API_SECRET).get_price().amount)
 
-    def calculate_local_max(self, x, y, look_ahead, std):
-        n = len(y)
-        local_max_x = []
-        local_max_y = []
-        mean = sum(y) / len(y)
+    def find_poi(self, x, y, time_limit, mean, std):
+        n = len(x)
 
-        # note don't index anything less then 0 and greater than n - 1
-        i = 0
-        while i < n:
-            # value to inspect
-            value = y[i]
-            l_condition, r_condition = True, True
+        abs_max = (x[0], y[0])
+        abs_min = (x[0], y[0])
 
-            # check left side
-            l_count = 0
-            while l_count < look_ahead:
-                index = i - l_count - 1
-                if index < 0:
-                    break
+        max_x = []
+        max_y = []
+        min_x = []
+        min_y = []
 
-                # if there is a point >= than the value or value is not > std + mean, not local max
-                if y[index] >= value or value <= mean + std:
-                    l_condition = False
-                    break
-                l_count += 1
+        value_increase = False
+        value_decrease = False
+        max_index = []
+        min_index = []
 
-            # check right side
-            r_count = 0
-            while r_count < look_ahead:
-                index = i + r_count + 1
-                if index > n - 1:
-                    break
+        for x_i, y_i, i in zip(x, y, range(n)):
+            if y_i > abs_max[1]:
+                abs_max = (x_i, y_i)
+            if y_i < abs_min[1]:
+                abs_min = (x_i, y_i)
+            if i == 0:
+                continue
+            if i == n - 1:
+                continue
 
-                # if there is a point >= than the value or value is not > std + mean, not local max
-                if y[index] >= value or value <= mean + std:
-                    r_condition = False
-                    break
-                r_count += 1
+            # values are increasing
+            if y[i - 1] < y_i:
+                # potential dip found
+                if value_decrease:
+                    value_decrease = False
+                    data_range = self.decrement_date(self.parse_time(str(x[i - 1])), s=time_limit)
+                    add_index = True
+                    for min_i in min_index:
+                        # last entry is out of date range, break out of loop
+                        if x[min_i] < data_range:
+                            break
 
-            # checking if local maximum conditions were met
-            if l_condition and r_condition:
-                local_max_x.append(x[i])
-                local_max_y.append(y[i])
+                        # last entry is smaller, don't add
+                        if y[i - 1] >= y[min_i]:
+                            add_index = False
+                            break
 
-            i += 1
+                        # new min is smaller, replace old min
+                        if y[i - 1] < y[min_i]:
+                            min_index.remove(min_i)
 
-        return local_max_x, local_max_y
+                    if add_index and y[i - 1] < mean - std:
+                        min_index.insert(0, i - 1)
 
-    def calculate_local_min(self, x, y, look_ahead, std):
-        n = len(y)
-        local_min_x = []
-        local_min_y = []
-        mean = sum(y) / len(y)
+                value_increase = True
 
-        # note don't index anything less then 0 and greater than n - 1
-        i = 0
-        while i < n:
-            # value to inspect
-            value = y[i]
-            l_condition, r_condition = True, True
+            # values are decreasing
+            if y[i - 1] > y_i:
+                # potential peak found
+                if value_increase:
+                    value_increase = False
+                    data_range = self.decrement_date(self.parse_time(str(x[i - 1])), s=time_limit)
+                    add_index = True
+                    for max_i in max_index:
+                        # last entry is out of date range, break out of loop
+                        if x[max_i] < data_range:
+                            break
 
-            # check left side
-            l_count = 0
-            while l_count < look_ahead:
-                index = i - l_count - 1
-                if index < 0:
-                    break
+                        if y[i - 1] <= y[max_i]:
+                            add_index = False
+                            break
 
-                # if there is a point <= than the value or value is not < std - mean, not local min
-                if y[index] <= value or value > mean - std:
-                    l_condition = False
-                    break
-                l_count += 1
+                        # new max is larger, replace old min
+                        if y[i - 1] > y[max_i]:
+                            max_index.remove(max_i)
 
-            # check right side
-            r_count = 0
-            while r_count < look_ahead:
-                index = i + r_count + 1
-                if index > n - 1:
-                    break
+                    if add_index and y[i - 1] > mean + std:
+                        max_index.insert(0, i - 1)
 
-                # if there is a point <= than the value or value is not < std - mean, not local min
-                if y[index] <= value or value > mean - std:
-                    r_condition = False
-                    break
-                r_count += 1
+                value_decrease = True
 
-            # checking if local maximum conditions were met
-            if l_condition and r_condition:
-                local_min_x.append(x[i])
-                local_min_y.append(y[i])
+        # packing up everything
+        for min_i in min_index:
+            min_x.insert(0, x[min_i])
+            min_y.insert(0, y[min_i])
 
-            i += 1
+        for max_i in max_index:
+            max_x.insert(0, x[max_i])
+            max_y.insert(0, y[max_i])
 
-        return local_min_x, local_min_y
-
-    def find_absolute_max(self, x, y):
-        n = len(y)
-        max_value = y[0]
-        max_date = x[0]
-
-        for i in range(n):
-            if y[i] > max_value:
-                max_value = y[i]
-                max_date = x[i]
-
-        return max_date, max_value
-
-    def find_absolute_min(self, x, y):
-        n = len(y)
-        min_value = y[0]
-        min_date = x[0]
-
-        for i in range(n):
-            if y[i] < min_value:
-                min_value = y[i]
-                min_date = x[i]
-
-        return min_date, min_value
+        return (max_x, max_y), (min_x, min_y), abs_max, abs_min
 
     def var(self, mean, data):
         sum_data = 0
@@ -276,6 +254,3 @@ class BotData:
 
     def std(self, var):
         return math.sqrt(var)
-
-    def remove_outliers(self, x, y, mean):
-        pass

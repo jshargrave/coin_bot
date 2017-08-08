@@ -20,12 +20,12 @@ FILE_PATH_KAGGLE = config.get('Data', 'kaggle file')
 
 # configuration for strategies
 MONITOR_DR = month * 3      # monitor_data(data_range(sec))
-MONITOR_R = 5               # monitor_data(refresh(min))
+MONITOR_R = min * 5         # monitor_data(refresh(sec))
 MONITOR_LA_PER = 0.20       # monitor_data(look_ahead_per(float))
 MONITOR_SED = 10            # monitor_data(stable_end_date(sec))
 
 STABLE_T = 0.8              # is_price_stable(threshold)
-STABLE_LA = min * 10        # is_price_stable(data_lookahead)
+STABLE_LA = hour            # is_price_stable(data_lookahead)
 
 POTENTIAL_GP = 0.2          # potential_gain_strategy(gain_per)
 
