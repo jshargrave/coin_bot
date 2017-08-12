@@ -1,4 +1,4 @@
 import bot_data as bd
 bd.BotData().rebuild_tables()
-#cfg.DB.process_data_kaggle(cfg.FILE_PATH_KAGGLE)
+bd.BotData().import_bitcoin_historical()
 bd.BotData().monitor_data()

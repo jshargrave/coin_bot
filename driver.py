@@ -1,6 +1,7 @@
 import bot_strategy as bs
 from multiprocessing import Process
-
+import bot_api as ba
+import config as cfg
 
 def main():
     pool = list()
