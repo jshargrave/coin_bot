@@ -1,142 +1,112 @@
-from dateutil.parser import *
 from datetime import *
-import config as cfg
-import bot_api as ba
 import sqlite3
-import csv
-import math
-import requests
 
 
 # dates used in database query should be formatted as "YYYY-MM-DD HH:MM:SS"
 class BotData:
-    def __init__(self):
-        self.conn = sqlite3.connect('BotData.db')
+    def __init__(self, name="BotData.db"):
+        self.name = name
+        self.conn = sqlite3.connect(name)
         self.cursor = self.conn.cursor()
-        self.cursor.execute("CREATE TABLE IF NOT EXISTS BitcoinHistorical(id integer PRIMARY KEY, date text NOT NULL, "
-                            "avg real NOT NULL)")
-        self.cursor.execute("CREATE TABLE IF NOT EXISTS BitcoinRealTime(id integer PRIMARY KEY, date text NOT NULL, "
-                            "price real NOT NULL)")
-        self.cursor.execute("CREATE TABLE IF NOT EXISTS BitcoinTrans(id integer PRIMARY KEY, date text NOT NULL, "
-                            "amount real NOT NULL, price real NOT NULL)")
+        self.build_all_tables()
 
-    def monitor_data(self, refresh=cfg.BD_MONITOR_R):
-        realtime_interval = datetime.utcnow().replace(second=0, microsecond=0) + timedelta(minutes=refresh)
-        historical_interval = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+    # Opens a connection to database $name
+    def open_database(self):
+        self.conn = sqlite3.connect(self.name)
+        self.cursor = self.conn.cursor()
 
-        print("Monitoring Data...")
-        while True:
-            # variable used to hold the current time
-            now_time = datetime.utcnow()
+    # Closes current database connection
+    def close_database(self):
+        self.conn.commit()
+        self.conn.close()
 
-            # importing real time updates
-            if now_time >= realtime_interval:
-                self.import_bitcoin_real_time(realtime_interval)
-                realtime_interval = (realtime_interval + timedelta(minutes=refresh))
+    # Executes a sql command passed by parameter on the current connected database
+    def execute_sql_command(self, sql_cmd):
+        self.cursor.execute(sql_cmd)
 
-            # importing historical updates
-            if now_time >= historical_interval:
-                self.import_bitcoin_historical(historical_interval)
-                historical_interval = (historical_interval + timedelta(days=1))
+    def drop_table(self, table):
+        self.execute_sql_command("DROP TABLE "+table+";")
+
+    def build_all_tables(self):
+        sql_cmd = "CREATE TABLE IF NOT EXISTS BitcoinHistorical (" \
+                  "  id integer PRIMARY KEY, " \
+                  "  date text NOT NULL, " \
+                  "  price real NOT NULL" \
+                  ");"
+        self.execute_sql_command(sql_cmd)
+
+        sql_cmd = "CREATE TABLE IF NOT EXISTS BitcoinRealTime (" \
+                  "  id integer PRIMARY KEY, " \
+                  "  date text NOT NULL, " \
+                  "  price real NOT NULL" \
+                  ");"
+        self.execute_sql_command(sql_cmd)
+
+    def drop_all_tables(self):
+        self.drop_table("BitcoinHistorical")
+        self.drop_table("BitcoinRealTime")
 
     def rebuild_tables(self):
-        print("Clearing all tables...", end='')
-        self.cursor.execute("DROP TABLE BitcoinHistorical")
-        self.cursor.execute("DROP TABLE BitcoinRealTime")
-        self.cursor.execute("DROP TABLE BitcoinTrans")
-        self.__init__()
-        print("Completed")
+        self.drop_all_tables()
+        self.build_all_tables()
 
     # ----------------------------------------------- Insert Commands ------------------------------------------
-    def insert_bitcoin_historical(self, array_tuple):
-        self.cursor.executemany("INSERT INTO BitcoinHistorical(date, avg) VALUES (?,?)", array_tuple)
+    def insert_bh(self, array_tuple):
+        self.cursor.executemany("INSERT INTO BitcoinHistorical (date, price) "
+                                "VALUES (?,?);", array_tuple)
         self.conn.commit()
 
-    def insert_bitcoin_real_time(self, array_tuple):
-        self.cursor.executemany("INSERT INTO BitcoinRealTime(date, price) VALUES (?,?)", array_tuple)
+    def insert_brt(self, array_tuple):
+        self.cursor.executemany("INSERT INTO BitcoinRealTime(date, price) "
+                                "VALUES (?,?);", array_tuple)
         self.conn.commit()
 
-    def insert_bitcoin_transactions(self, array_tuple):
-        self.cursor.executemany("INSERT INTO BitcoinTrans(date, amount, price) VALUES (?,?,?)", array_tuple)
+    # ------------------------------------------------ Delete Commands -----------------------------------------
+    def delete_where_bh(self, condition):
+        sql_cmd = "DELETE FROM BitcoinHistorical " \
+                  "WHERE "+ condition + ";"
+        self.execute_sql_command(sql_cmd)
+        self.conn.commit()
+
+    def delete_where_brt(self, condition):
+        sql_cmd = "DELETE FROM BitcoinRealTime " \
+                  "WHERE " + condition + ";"
+        self.execute_sql_command(sql_cmd)
         self.conn.commit()
 
     # ------------------------------------------- Select Commands ------------------------------------------------
-    def select_bitcoin_historical(self, date_range):
-        self.cursor.execute("SELECT * FROM BitcoinHistorical WHERE date >= ? and date <= ?", date_range)
-        return self.cursor.fetchall()
+    def select_bh_range(self, date_range):
+        self.cursor.execute("SELECT * FROM BitcoinHistorical "
+                            "WHERE date >= ? and date <= ? "
+                            "ORDER BY date ASC;", date_range)
+        for i in self.select_generator():
+            yield i
 
-    def select_bitcoin_historical_all(self):
-        self.cursor.execute("SELECT * FROM BitcoinHistorical")
-        return self.cursor.fetchall()
+    def select_bh_all(self):
+        self.cursor.execute("SELECT * FROM BitcoinHistorical "
+                            "ORDER BY date ASC;")
+        for i in self.select_generator():
+            yield i
 
-    def select_bitcoin_real_time(self, date_range):
-        self.cursor.execute("SELECT * FROM BitcoinRealTime WHERE date >= ? and date <= ?", date_range)
-        return self.cursor.fetchall()
+    def select_brt_range(self, date_range):
+        self.cursor.execute("SELECT * FROM BitcoinRealTime "
+                            "WHERE date >= ? and date <= ? "
+                            "ORDER BY date ASC;", date_range)
+        for i in self.select_generator():
+            yield i
 
-    def select_bitcoin_real_time_all(self):
-        self.cursor.execute("SELECT * FROM BitcoinRealTime")
-        return self.cursor.fetchall()
+    def select_brt_all(self):
+        self.cursor.execute("SELECT * FROM BitcoinRealTime "
+                            "ORDER BY date ASC;")
+        for i in self.select_generator():
+            yield i
 
-    # -------------------------------------------- Data Processing Functions -----------------------------------
-    def process_data_bitcoinity(self, file_path):
-        read_file = open(file_path, 'r')
-        csv_reader = csv.reader(read_file)
-
-        data = []
-        next(csv_reader, None)
-        for row in csv_reader:
-            data_line = (self.parse_time(row[0]), float(row[1]))
-            data.append(data_line)
-
-        read_file.close()
-        self.insert_bitcoin_historical(data)
-
-    def process_data_kaggle(self, file_path):
-        print("Reading in Kaggle dataset...")
-        read_file = open(file_path, 'r')
-        csv_reader = csv.reader(read_file)
-
-        data = []
-        count = 0
-        next(csv_reader, None)
-        for row in csv_reader:
-            if "NaN" in row:
-                continue
-            count += 1
-
-            time_stamp = datetime.utcfromtimestamp(float(row[0]))
-            data_line = (str(time_stamp), (float(row[2]) + float(row[3]))/2)
-            data.append(data_line)
-
-        self.insert_bitcoin_historical(data)
-        print("Completed: %.0f items inserted.", count)
-        read_file.close()
-
-    def import_bitcoin_historical(self, date_scope=datetime.min):
-        print("Importing Historical Bitcoin...", end='')
-        url = 'https://data.bitcoinity.org/export_data.csv?currency=USD&data_type=price&exchange=coinbase' \
-                  '&t=l&timespan=all'
-        with requests.Session() as s:
-            download = s.get(url)
-            decoded_content = download.content.decode('utf-8')
-            cr = csv.reader(decoded_content.splitlines(), delimiter=',')
-            next(cr, None)
-            my_list = list(cr)
-
-            data_list = []
-            for row in my_list:
-                if date_scope <= self.parse_time(row[0]):
-                    data_list.append((row[0].strip(' UTC'), row[1]))
-
-            s.close()
-            self.insert_bitcoin_historical(data_list)
-            print("Completed.")
-
-    def import_bitcoin_real_time(self, date):
-        price = ba.CoinBaseAPI(cfg.API_KEY, cfg.API_SECRET).get_price('BTC')
-        self.insert_bitcoin_real_time([(date, price)])
-        print(date, price)
-
-    def parse_time(self, time_stamp):
-        new_time = parse(time_stamp).replace(microsecond=0).replace(tzinfo=None)
-        return new_time
+    # This function is used as a generator to yield select results.  Run this function after a select exicutes to yield
+    # the results.  The amount parameter specifies how many rows to select at a time.
+    def select_generator(self, amount=1000):
+        while True:
+            rows = self.cursor.fetchmany(amount)
+            if not rows:
+                break
+            for row in rows:
+                yield row
