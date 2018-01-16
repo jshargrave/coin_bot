@@ -2,13 +2,14 @@ import requests
 
 current_btc_price_url = "https://api.coindesk.com/v1/bpi/currentprice.json"
 historical_btc_price_url = "https://api.coindesk.com/v1/bpi/historical/close.json?start={}&end={}"
+yesterdays_btc_price_url = "https://api.coindesk.com/v1/bpi/historical/close.json?for=yesterday"
 
 
 class CoinDeskAPI:
     def __init__(self):
         self.r = requests
     '''
-      gets the current btc price and returns a float
+      gets the current btc price and returns a tuple (date, price)
     '''
     def get_btc_price(self):
         self.r = requests.get(current_btc_price_url)
@@ -16,12 +17,16 @@ class CoinDeskAPI:
         price = self.r.json()['bpi']['USD']['rate_float']
         return self.convert_date_rt_btc(date), price
 
+    def get_btc_yesterdays_price(self):
+        self.r = requests.get(yesterdays_btc_price_url)
+        data = [(k, v) for k, v in self.r.json()['bpi'].items()][0]
+        return data
 
     '''
       returns the historical prices of btc over the date_range (start date, end date) in json.  date_range is a tuple 
       starting with the start date and then the end date.  dates should be formatted such that YYYY-MM-DD.  
     '''
-    def get_btc_hist_price(self, date_range):
+    def get_btc_hist_price_range(self, date_range):
         url = historical_btc_price_url.format(*date_range)
         self.r = requests.get(url)
         return self.r.json()['bpi']
@@ -31,10 +36,12 @@ class CoinDeskAPI:
       (price of btc) after each iteration.
     '''
     def btc_hist_price_generator(self, date_range):
-        for x, y in self.get_btc_hist_price(date_range).items():
+        for x, y in self.get_btc_hist_price_range(date_range).items():
             yield x, y
 
     '''
+      This function should be used to return an array tuple to insert into a database.
+      
       Uses the btc_generator function to return a array of tuples to be used to insert into a database.  Returns an 
       array of tuples [(key, value)] of the date and price.
     '''

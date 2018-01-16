@@ -31,14 +31,16 @@ class BotData:
         sql_cmd = "CREATE TABLE IF NOT EXISTS BitcoinHistorical (" \
                   "  id integer PRIMARY KEY, " \
                   "  date text NOT NULL, " \
-                  "  price real NOT NULL" \
+                  "  price real NOT NULL," \
+                  "  UNIQUE(date)" \
                   ");"
         self.execute_sql_command(sql_cmd)
 
         sql_cmd = "CREATE TABLE IF NOT EXISTS BitcoinRealTime (" \
                   "  id integer PRIMARY KEY, " \
                   "  date text NOT NULL, " \
-                  "  price real NOT NULL" \
+                  "  price real NOT NULL," \
+                  "  UNIQUE(date)" \
                   ");"
         self.execute_sql_command(sql_cmd)
 
@@ -77,7 +79,7 @@ class BotData:
     # ------------------------------------------- Select Commands ------------------------------------------------
     def select_bh_range(self, date_range):
         self.cursor.execute("SELECT * FROM BitcoinHistorical "
-                            "WHERE date >= ? and date <= ? "
+                            "WHERE date >= ? AND date <= ? "
                             "ORDER BY date ASC;", date_range)
         for i in self.select_generator():
             yield i
@@ -90,7 +92,7 @@ class BotData:
 
     def select_brt_range(self, date_range):
         self.cursor.execute("SELECT * FROM BitcoinRealTime "
-                            "WHERE date >= ? and date <= ? "
+                            "WHERE date >= ? AND date <= ? "
                             "ORDER BY date ASC;", date_range)
         for i in self.select_generator():
             yield i

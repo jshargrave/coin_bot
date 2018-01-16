@@ -1,60 +1,44 @@
 import matplotlib.pyplot as plt
-import warnings
-import matplotlib.cbook
-warnings.filterwarnings("ignore",category=matplotlib.cbook.mplDeprecation)
+import matplotlib.dates as mdates
+import datetime
 
 
-class GraphChart:
-    def graph_data(self, x, y, mean, std, local_maximums=([], []), local_minimums=([], []), absolute_max=(), absolute_min=()):
-        # clear entire figure
-        plt.clf()
 
+class GraphData:
+    def __init__(self):
+        self.x = []
+        self.y = []
+
+        # You probably won't need this if you're embedding things in a tkinter plot...
         plt.ion()
-        plt.xlabel("Date")
-        plt.ylabel("Price")
 
-        # plot avg, max, min
-        plt.plot(x, y)
+        self.fig1 = plt.figure(num=1)
+        self.ax1 = self.fig1.add_subplot(111)
 
-        # plot max and min avg
-        plt.plot(local_maximums[0], local_maximums[1], 'ro')
-        plt.plot(local_minimums[0], local_minimums[1], 'bs')
+        self.line1, = self.ax1.plot(self.x, self.y, 'r-')  # Returns a tuple of line objects, thus the comma
 
-        # label absolute max and min
-        plt.annotate(
-            "Absolute Max",
-            xy=absolute_max, xytext=(-20, 20),
-            textcoords='offset points', ha='right', va='bottom',
-            bbox=dict(boxstyle='round,pad=0.5', fc='yellow', alpha=0.5),
-            arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0'))
+        self.fig1.autofmt_xdate()
+        self.xfmt = mdates.DateFormatter("%Y-%m-%d")
+        self.ax1.xaxis.set_major_formatter(self.xfmt)
 
-        plt.annotate(
-            "Absolute Min",
-            xy=absolute_min, xytext=(100, -5),
-            textcoords='offset points', ha='right', va='bottom',
-            bbox=dict(boxstyle='round,pad=0.5', fc='yellow', alpha=0.5),
-            arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0'))
+    def update_graph(self, new_data):
+        # appending new data to x and y lists
+        self.x.append(datetime.datetime.strptime(new_data[0], "%Y-%m-%d %H:%M:%S"))
+        self.y.append(new_data[1])
 
-        # draw mean, mean + std, and mean - std
-        plt.axhline(mean, color='r')
-        plt.axhline(mean + std, color='b')
-        plt.axhline(mean - std, color='b')
-        plt.gcf().autofmt_xdate()
+        # setting new data
+        self.line1.set_xdata(self.x)
+        self.line1.set_ydata(self.y)
 
-    def normal_graph(self, x, y, mean, std):
-        plt.xlabel("Date")
-        plt.ylabel("Price")
+    def graph_data(self, data_generator):
+        for i in data_generator:
+            self.update_graph((i[1], i[2]))
+        self.redraw_figure()
 
-        # plot avg, max, min
-        plt.plot(x, y)
+    def redraw_figure(self):
+        # resizing figure
+        self.ax1.relim()
+        self.ax1.autoscale_view()
 
-        # draw mean, mean + std, and mean - std
-        plt.axhline(mean, color='r')
-        plt.axhline(mean + std, color='b')
-        plt.axhline(mean - std, color='b')
-        plt.gcf().autofmt_xdate()
-
-        plt.show()
-
-    def update_graph(self):
-        plt.pause(0.05)
+        # drawing figure
+        self.fig1.canvas.draw()
