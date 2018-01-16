@@ -1,7 +1,6 @@
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
-import datetime
-
+import dateutil.parser
 
 
 class GraphData:
@@ -9,12 +8,10 @@ class GraphData:
         self.x = []
         self.y = []
 
-        # You probably won't need this if you're embedding things in a tkinter plot...
-        plt.ion()
+        self.fig1, (self.ax1) = plt.subplots(1)
+        self.fig1_num = self.fig1.number
 
-        self.fig1 = plt.figure(num=1)
-        self.ax1 = self.fig1.add_subplot(111)
-
+        self.fig1.add_axes(self.ax1, label="ax1")
         self.line1, = self.ax1.plot(self.x, self.y, 'r-')  # Returns a tuple of line objects, thus the comma
 
         self.fig1.autofmt_xdate()
@@ -23,7 +20,7 @@ class GraphData:
 
     def update_graph(self, new_data):
         # appending new data to x and y lists
-        self.x.append(datetime.datetime.strptime(new_data[0], "%Y-%m-%d %H:%M:%S"))
+        self.x.append(dateutil.parser.parse(new_data[0]))
         self.y.append(new_data[1])
 
         # setting new data
@@ -40,5 +37,5 @@ class GraphData:
         self.ax1.relim()
         self.ax1.autoscale_view()
 
-        # drawing figure
-        self.fig1.canvas.draw()
+        self.fig1.canvas.draw()  # drawing figure
+        self.fig1.show()         # display figure
