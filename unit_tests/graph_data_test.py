@@ -24,9 +24,10 @@ class test_graph_data_methods(unittest.TestCase):
 
         self.graph_d = GraphData()
 
-
     def test_update_graph(self):
-        self.graph_d.graph_data(self.data_p.bot_d.select_bh_range(("2017-11-01", "2019-01-01")))
+        self.graph_d.graph_data(self.data_p.bot_d.select_bh_range(("2016-11-01", "2017-01-01")))
+        time.sleep(2)
+        self.graph_d.graph_data(self.data_p.bot_d.select_bh_range(("2017-01-02", "2017-02-01")))
         time.sleep(5)
 
     def data_generator(self):
