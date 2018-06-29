@@ -1,14 +1,18 @@
-from datetime import *
 import sqlite3
+import datetime_funcs
 
 
 # dates used in database query should be formatted as "YYYY-MM-DD HH:MM:SS"
 class BotData:
-    def __init__(self, name="BotData.db"):
+    def __init__(self, data_func_dict, name="data/BotData.db"):
         self.name = name
         self.conn = sqlite3.connect(name)
         self.cursor = self.conn.cursor()
-        self.build_all_tables()
+        self.data_func_dict = data_func_dict
+
+        # Rebuilding the database
+        self.rebuild_tables()
+        self.insert_all_data()
 
     # Opens a connection to database $name
     def open_database(self):
@@ -32,7 +36,7 @@ class BotData:
                   "  id integer PRIMARY KEY, " \
                   "  date text NOT NULL, " \
                   "  price real NOT NULL," \
-                  "  UNIQUE(date)" \
+                  "  UNIQUE(id, date)" \
                   ");"
         self.execute_sql_command(sql_cmd)
 
@@ -40,13 +44,17 @@ class BotData:
                   "  id integer PRIMARY KEY, " \
                   "  date text NOT NULL, " \
                   "  price real NOT NULL," \
-                  "  UNIQUE(date)" \
+                  "  UNIQUE(id, date)" \
                   ");"
         self.execute_sql_command(sql_cmd)
 
     def drop_all_tables(self):
-        self.drop_table("BitcoinHistorical")
-        self.drop_table("BitcoinRealTime")
+        # Select all tabels
+        self.cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+
+        # Loop through result
+        for i in self.select_generator():
+            self.drop_table(i[0])
 
     def rebuild_tables(self):
         self.drop_all_tables()
@@ -103,8 +111,10 @@ class BotData:
         for i in self.select_generator():
             yield i
 
-    # This function is used as a generator to yield select results.  Run this function after a select exicutes to yield
-    # the results.  The amount parameter specifies how many rows to select at a time.
+    # ------------------------------------------- Misc Functions -------------------------------------------
+
+    # This function is used as a generator to yield select results.  This function is automatically called after each
+    # select command on the database is executed.  The amount parameter specifies how many rows to select at a time.
     def select_generator(self, amount=1000):
         while True:
             rows = self.cursor.fetchmany(amount)
@@ -112,3 +122,16 @@ class BotData:
                 break
             for row in rows:
                 yield row
+
+    def insert_all_data(self):
+        # Insert historical data
+        if 'BTC_Historical' in self.data_func_dict.keys():
+            date_range = datetime_funcs.btc_all_data_date_range()
+            data = self.data_func_dict['BTC_Historical'](date_range)
+            self.insert_bh(data)
+
+        # Insert real time data
+        if 'BTC_Real_Time' in self.data_func_dict.keys():
+            data = self.data_func_dict['BTC_Real_Time']()
+            self.insert_brt(data)
+

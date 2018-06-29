@@ -1,4 +1,9 @@
 import requests
+import datetime_funcs
+
+
+class CouldNotGetBTCHistoricalPrice(ValueError): pass
+
 
 current_btc_price_url = "https://api.coindesk.com/v1/bpi/currentprice.json"
 historical_btc_price_url = "https://api.coindesk.com/v1/bpi/historical/close.json?start={}&end={}"
@@ -27,9 +32,13 @@ class CoinDeskAPI:
       starting with the start date and then the end date.  dates should be formatted such that YYYY-MM-DD.  
     '''
     def get_btc_hist_price_range(self, date_range):
-        url = historical_btc_price_url.format(*date_range)
-        self.r = requests.get(url)
-        return self.r.json()['bpi']
+        try:
+            url = historical_btc_price_url.format(*date_range)
+            self.r = requests.get(url)
+            return self.r.json()['bpi']
+        except ValueError as e:
+            raise CouldNotGetBTCHistoricalPrice("Failed to get btc historical price range!\n{}".format(self.r.text))
+
 
     '''
       Generator for reading through the contents of btc historical prices.  Yields the key (date) and value 
@@ -51,9 +60,11 @@ class CoinDeskAPI:
             data_list.append((self.convert_date_hist_btc(x), y))
         return data_list
 
-    def convert_date_rt_btc(self, date_str):
+    @staticmethod
+    def convert_date_rt_btc(date_str):
         return date_str[:-6].replace("T", " ")
 
-    def convert_date_hist_btc(self, date_str):
-        return "{} 00:00:00".format(date_str)
+    @staticmethod
+    def convert_date_hist_btc(date_str):
+        return datetime_funcs.add_time_format(date_str)
 

@@ -16,7 +16,7 @@ API_SECRET = config.get('CoinBase API', 'API Secret')
 
 # get data information
 FILE_PATH_BITCOINITY = config.get('Data', 'bitcoinity file')
-FILE_PATH_KAGGLE = config.get('Data', 'kaggle file')
+#FILE_PATH_KAGGLE = config.get('Data', 'kaggle file')
 
 # bot_strategy.py
 # def monitor()
