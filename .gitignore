@@ -4,3 +4,6 @@ Env
 
 config.cfg
 data/BotData.db
+
+data/balance.json
+data/trade.json
