@@ -4,24 +4,23 @@ import datetime
 
 
 class BotTrade:
-    def __init__(self, balance_file="data\\balance.json", trade_file="data\\trade.json", simulated=True):
-        self.balance_file = balance_file
-        self.trade_file = trade_file
+    def __init__(self, coin_price_dict, balance_file="data\\balance.json", trade_file="data\\trade.json", simulated=True):
+        self._coin_price_dict = coin_price_dict
+        self._balance_file = balance_file
+        self._trade_file = trade_file
         self._balance = self.get_balance()
         self._trade_list = self.get_trade()
-        self.simulated = simulated
-        self.trade_count = len(self._trade_list)
-
+        self._simulated = simulated
 
         self.save_all()
 
     def get_balance(self):
         # If no balance file exist, then load default balance
-        if not os.path.exists(self.balance_file):
+        if not os.path.exists(self._balance_file):
             return self.default_balance()
 
         # Read and return json value
-        with open(self.balance_file, 'r') as infile:
+        with open(self._balance_file, 'r') as infile:
             file_str = infile.read()
 
         json_parsed = json.loads(file_str)
@@ -29,15 +28,19 @@ class BotTrade:
 
     @staticmethod
     def default_balance():
-        return {"USD": 0, "BTC": 0}
+        return {
+            "USD": 0,
+            "BTC": 0,
+            "Trade Count": 0
+        }
 
     def get_trade(self):
         # If no balance file exist, then load default balance
-        if not os.path.exists(self.trade_file):
+        if not os.path.exists(self._trade_file):
             return self.default_trade()
 
         # Read and return json value
-        with open(self.trade_file, 'r') as infile:
+        with open(self._trade_file, 'r') as infile:
             file_str = infile.read()
 
         json_parsed = json.loads(file_str)
@@ -52,15 +55,16 @@ class BotTrade:
         self.save_trade()
 
     def save_balance(self):
-        with open(self.balance_file, 'w') as outfile:
+        with open(self._balance_file, 'w') as outfile:
             json.dump(self._balance, outfile, indent=4, sort_keys=True)
 
     def save_trade(self):
-        with open(self.trade_file, 'w') as outfile:
+        with open(self._trade_file, 'w') as outfile:
             trade_sorted = sorted(self._trade_list, key=lambda k: k['Time'], reverse=True)
             json.dump(trade_sorted, outfile, indent=4, sort_keys=True)
 
-    def buy_coin(self, coin, coin_price, amount, max_cost=-1):
+    def buy_coin(self, coin, amount, max_cost=-1):
+        coin_price = self._coin_price_dict[coin]()
         total_cost = coin_price * amount
 
         # Make sure total cost is not more than max cost
@@ -74,7 +78,7 @@ class BotTrade:
             return
 
         trade_data = {
-            "Trade number": self.trade_count,
+            "Trade number": self._balance["Trade Count"],
             "Coin": coin,
             "Buy Price": coin_price,
             "Amount": amount,
@@ -84,5 +88,20 @@ class BotTrade:
         self._trade_list.append(trade_data)
         self._balance[coin] += amount
         self._balance["USD"] -= total_cost
-        self.trade_count += 1
+        self._balance["Trade Count"] += 1
+        self.save_all()
+
+    def sell_coin(self, trade_data):
+        coin = trade_data["Coin"]
+        coin_price = self._coin_price_dict[coin]()
+        total_sell = coin_price * trade_data["Amount"]
+
+        # Make sure we are making a profit when selling
+        if total_sell < trade_data["Total Cost"]:
+            print("Could not sell coin ({}) because Total Sell Price ({}) is less than Total Cost ({})".format(coin, total_sell, trade_data["Total Cost"]))
+            return
+
+        self._trade_list.remove(trade_data)
+        self._balance[trade_data["Coin"]] -= trade_data["Amount"]
+        self._balance["USD"] += total_sell
         self.save_all()
