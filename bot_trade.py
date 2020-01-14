@@ -9,10 +9,9 @@ class BotTrade:
         self._balance_file = balance_file
         self._trade_file = trade_file
         self._balance = self.get_balance()
-        self._trade_list = self.get_trade()
-        self._simulated = simulated
+        self._trade = self.get_trade()
 
-        self.save_all()
+        self._simulated = simulated
 
     def get_balance(self):
         # If no balance file exist, then load default balance
@@ -31,7 +30,6 @@ class BotTrade:
         return {
             "USD": 0,
             "BTC": 0,
-            "Trade Count": 0
         }
 
     def get_trade(self):
@@ -48,7 +46,10 @@ class BotTrade:
 
     @staticmethod
     def default_trade():
-        return []
+        return {
+            "Trade Count": 0,
+            "Trades": {}
+        }
 
     def save_all(self):
         self.save_balance()
@@ -60,8 +61,7 @@ class BotTrade:
 
     def save_trade(self):
         with open(self._trade_file, 'w') as outfile:
-            trade_sorted = sorted(self._trade_list, key=lambda k: k['Time'], reverse=True)
-            json.dump(trade_sorted, outfile, indent=4, sort_keys=True)
+            json.dump(self._trade, outfile, indent=4, sort_keys=True)
 
     def buy_coin(self, coin, amount, max_cost=-1):
         coin_price = self._coin_price_dict[coin]()
@@ -78,20 +78,22 @@ class BotTrade:
             return
 
         trade_data = {
-            "Trade number": self._balance["Trade Count"],
+            "Trade Id": self.get_trade_id(),
             "Coin": coin,
             "Buy Price": coin_price,
             "Amount": amount,
             "Total Cost": total_cost,
             "Time": str(datetime.datetime.now())
         }
-        self._trade_list.append(trade_data)
+
+        self._trade["Trades"][str(self.get_trade_id())] = trade_data
+        self._trade["Trade Count"] += 1
         self._balance[coin] += amount
         self._balance["USD"] -= total_cost
-        self._balance["Trade Count"] += 1
         self.save_all()
 
-    def sell_coin(self, trade_data):
+    def sell_coin(self, trade_id):
+        trade_data = self._trade["Trades"][trade_id]
         coin = trade_data["Coin"]
         coin_price = self._coin_price_dict[coin]()
         total_sell = coin_price * trade_data["Amount"]
@@ -101,7 +103,22 @@ class BotTrade:
             print("Could not sell coin ({}) because Total Sell Price ({}) is less than Total Cost ({})".format(coin, total_sell, trade_data["Total Cost"]))
             return
 
-        self._trade_list.remove(trade_data)
+        del self._trade["Trades"][trade_id]
         self._balance[trade_data["Coin"]] -= trade_data["Amount"]
         self._balance["USD"] += total_sell
         self.save_all()
+
+    def get_trade_id(self):
+        return self._trade["Trade Count"]
+
+    def get_trades_to_sell(self, min_profit):
+        sell_trades = []
+        for key, trade in self._trade["Trades"].items():
+            coin = trade["Coin"]
+            coin_price = self._coin_price_dict[coin]()
+            total_cost = trade["Total Cost"]
+            profit = coin_price * trade["Amount"] - total_cost
+
+            if profit > min_profit:
+                sell_trades.append(key)
+        return sell_trades
