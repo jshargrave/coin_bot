@@ -1,10 +1,12 @@
 certifi==2019.11.28
 chardet==3.0.4
+coinbase==2.1.0
 cycler==0.10.0
 idna==2.8
 kiwisolver==1.1.0
 matplotlib==3.1.2
 numpy==1.18.1
+pycryptodome==3.9.4
 pyparsing==2.4.6
 python-dateutil==2.8.1
 requests==2.22.0
