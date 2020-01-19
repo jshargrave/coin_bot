@@ -20,7 +20,7 @@ class CoinDeskAPI:
         self.r = requests.get(current_btc_price_url)
         date = self.r.json()['time']['updatedISO']
         price = self.r.json()['bpi']['USD']['rate_float']
-        return price
+        return datetime_funcs.get_current_date(), price
 
     def get_btc_yesterdays_price(self):
         self.r = requests.get(yesterdays_btc_price_url)
