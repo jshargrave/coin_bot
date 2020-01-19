@@ -56,3 +56,7 @@ def average_datetime(datetime_list):
             total_time_delta += max_datetime - date_item
 
         return max_datetime - total_time_delta / len(datetime_list)
+
+
+def get_current_date():
+    return display_datetime(dt.datetime.now())

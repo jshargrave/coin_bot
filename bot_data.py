@@ -4,15 +4,71 @@ import datetime_funcs
 
 # dates used in database query should be formatted as "YYYY-MM-DD HH:MM:SS"
 class BotData:
-    def __init__(self, data_func_dict, name="data/BotData.db"):
+    def __init__(self, name="data/BotData.db"):
+        self.table_meta = {
+            "BitcoinHistorical": {
+                "Name": "BitcoinHistorical",
+                "CreateCmd": "CREATE TABLE IF NOT EXISTS BitcoinHistorical ("
+                             "  date text NOT NULL PRIMARY KEY, "
+                             "  price real NOT NULL,"
+                             "  UNIQUE(date)"
+                             ");",
+                "InsertCmd": "INSERT or REPLACE INTO BitcoinHistorical (date, price) "
+                             "VALUES (?,?);",
+                "SelectWhereDateCmd": "SELECT * FROM BitcoinHistorical "
+                                      "WHERE date >= ? AND date <= ? "
+                                      "ORDER BY date ASC;",
+                "SelectAllCmd": "SELECT * FROM BitcoinHistorical "
+                                "ORDER BY date ASC;",
+                "SelectNewCmd": "SELECT * "
+                                "FROM "
+                                "("
+                                "   SELECT * FROM BitcoinHistorical "
+                                "   ORDER BY date DESC "
+                                "   LIMIT (?) "
+                                ")"
+                                "ORDER BY date ASC;",
+                "SelectLastCmd": "SELECT * FROM BitcoinRealTime "
+                                 "ORDER BY date DESC "
+                                 "LIMIT 1 ",
+                "NewCount": "0",
+            },
+            "BitcoinRealTime": {
+                "Name": "BitcoinRealTime",
+                "CreateCmd": "CREATE TABLE IF NOT EXISTS BitcoinRealTime ("
+                             "  date text NOT NULL PRIMARY KEY, "
+                             "  price real NOT NULL,"
+                             "  UNIQUE(date)"
+                             ");",
+                "InsertCmd": "INSERT or REPLACE INTO BitcoinRealTime (date, price) "
+                             "VALUES (?,?);",
+                "SelectWhereDateCmd": "SELECT * FROM BitcoinRealTime "
+                                      "WHERE date >= ? AND date <= ? "
+                                      "ORDER BY date ASC;",
+                "SelectAllCmd": "SELECT * FROM BitcoinRealTime "
+                                "ORDER BY date ASC;",
+                "SelectNewCmd": "SELECT * "
+                                "FROM "
+                                "("
+                                "   SELECT * FROM BitcoinRealTime "
+                                "   ORDER BY date DESC "
+                                "   LIMIT (?) "
+                                ")"
+                                "ORDER BY date ASC;",
+                "SelectLastCmd": "SELECT * FROM BitcoinRealTime "
+                                 "ORDER BY date DESC "
+                                 "LIMIT 1 ",
+                "NewCount": "0"
+            }
+        }
+
         self.name = name
         self.conn = sqlite3.connect(name)
         self.cursor = self.conn.cursor()
-        self.data_func_dict = data_func_dict
 
         # Rebuilding the database
-        self.rebuild_tables()
-        self.insert_all_data()
+        #self.rebuild_tables()
+        self.build_all_tables()
 
     # Opens a connection to database $name
     def open_database(self):
@@ -24,32 +80,16 @@ class BotData:
         self.conn.commit()
         self.conn.close()
 
-    # Executes a sql command passed by parameter on the current connected database
-    def execute_sql_command(self, sql_cmd):
-        self.cursor.execute(sql_cmd)
-
     def drop_table(self, table):
-        self.execute_sql_command("DROP TABLE "+table+";")
+        self.cursor.execute("DROP TABLE "+table+";")
 
     def build_all_tables(self):
-        sql_cmd = "CREATE TABLE IF NOT EXISTS BitcoinHistorical (" \
-                  "  id integer PRIMARY KEY, " \
-                  "  date text NOT NULL, " \
-                  "  price real NOT NULL," \
-                  "  UNIQUE(id, date)" \
-                  ");"
-        self.execute_sql_command(sql_cmd)
-
-        sql_cmd = "CREATE TABLE IF NOT EXISTS BitcoinRealTime (" \
-                  "  id integer PRIMARY KEY, " \
-                  "  date text NOT NULL, " \
-                  "  price real NOT NULL," \
-                  "  UNIQUE(id, date)" \
-                  ");"
-        self.execute_sql_command(sql_cmd)
+        for key, item in self.table_meta.items():
+            sql_cmd = item["CreateCmd"]
+            self.cursor.execute(sql_cmd)
 
     def drop_all_tables(self):
-        # Select all tabels
+        # Select all tables
         self.cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
 
         # Loop through result
@@ -61,55 +101,56 @@ class BotData:
         self.build_all_tables()
 
     # ----------------------------------------------- Insert Commands ------------------------------------------
-    def insert_bh(self, array_tuple):
-        self.cursor.executemany("INSERT INTO BitcoinHistorical (date, price) "
-                                "VALUES (?,?);", array_tuple)
-        self.conn.commit()
+    def insert(self, table, array_tuple):
+        if table in self.table_meta.keys():
+            sql_cmd = self.table_meta[table]["InsertCmd"]
+            self.cursor.executemany(sql_cmd, array_tuple)
+            self.conn.commit()
 
-    def insert_brt(self, array_tuple):
-        self.cursor.executemany("INSERT INTO BitcoinRealTime(date, price) "
-                                "VALUES (?,?);", array_tuple)
-        self.conn.commit()
-
-    # ------------------------------------------------ Delete Commands -----------------------------------------
-    def delete_where_bh(self, condition):
-        sql_cmd = "DELETE FROM BitcoinHistorical " \
-                  "WHERE "+ condition + ";"
-        self.execute_sql_command(sql_cmd)
-        self.conn.commit()
-
-    def delete_where_brt(self, condition):
-        sql_cmd = "DELETE FROM BitcoinRealTime " \
-                  "WHERE " + condition + ";"
-        self.execute_sql_command(sql_cmd)
-        self.conn.commit()
+            # Update new element
+            self.table_meta[table]["NewCount"] = str(int(self.table_meta[table]["NewCount"]) + len(array_tuple))
 
     # ------------------------------------------- Select Commands ------------------------------------------------
-    def select_bh_range(self, date_range):
-        self.cursor.execute("SELECT * FROM BitcoinHistorical "
-                            "WHERE date >= ? AND date <= ? "
-                            "ORDER BY date ASC;", date_range)
-        for i in self.select_generator():
-            yield i
+    def select(self, table, date_range=tuple()):
+        if table in self.table_meta.keys():
+            if date_range:
+                sql_cmd = self.table_meta[table]["SelectAllCmd"]
+                self.cursor.execute(sql_cmd)
+            else:
+                sql_cmd = self.table_meta[table]["SelectWhereDateCmd"]
+                self.cursor.execute(sql_cmd, date_range)
 
-    def select_bh_all(self):
-        self.cursor.execute("SELECT * FROM BitcoinHistorical "
-                            "ORDER BY date ASC;")
-        for i in self.select_generator():
-            yield i
+            for i in self.select_generator():
+                yield i
 
-    def select_brt_range(self, date_range):
-        self.cursor.execute("SELECT * FROM BitcoinRealTime "
-                            "WHERE date >= ? AND date <= ? "
-                            "ORDER BY date ASC;", date_range)
-        for i in self.select_generator():
-            yield i
+    def select_new(self, table):
+        if table in self.table_meta.keys():
+            if self.table_meta[table]["NewCount"]:
+                sql_cmd = self.table_meta[table]["SelectNewCmd"]
+                new_count = (self.table_meta[table]["NewCount"], )
+                self.cursor.execute(sql_cmd, new_count)
 
-    def select_brt_all(self):
-        self.cursor.execute("SELECT * FROM BitcoinRealTime "
-                            "ORDER BY date ASC;")
-        for i in self.select_generator():
-            yield i
+                # Clear NewCount
+                self.table_meta[table]["NewCount"] = "0"
+
+                for i in self.select_generator():
+                    yield i
+
+    def select_last(self, table):
+        if table in self.table_meta.keys():
+            sql_cmd = self.table_meta[table]["SelectLastCmd"]
+            self.cursor.execute(sql_cmd)
+
+            for i in self.select_generator():
+                yield i
+
+    def select_all(self, table):
+        if table in self.table_meta.keys():
+            sql_cmd = self.table_meta[table]["SelectAllCmd"]
+            self.cursor.execute(sql_cmd)
+
+            for i in self.select_generator():
+                yield i
 
     # ------------------------------------------- Misc Functions -------------------------------------------
 
@@ -122,16 +163,3 @@ class BotData:
                 break
             for row in rows:
                 yield row
-
-    def insert_all_data(self):
-        # Insert historical data
-        if 'BTC_Historical' in self.data_func_dict.keys():
-            date_range = datetime_funcs.btc_all_data_date_range()
-            data = self.data_func_dict['BTC_Historical'](date_range)
-            self.insert_bh(data)
-
-        # Insert real time data
-        if 'BTC_Real_Time' in self.data_func_dict.keys():
-            data = self.data_func_dict['BTC_Real_Time']()
-            self.insert_brt(data)
-

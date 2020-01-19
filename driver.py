@@ -1,26 +1,39 @@
-import bot_strategy
-from multiprocessing import Process
-import config as cfg
-
-import datetime as dt
-
-from coin_desk_api import CoinDeskAPI
-from bot_data import BotData
-from moving_avg import MovingAverage
+from data_processing import DataProcessing
+import datetime
 
 
 def main():
-    # Creating dictionary for data retrieving
-    data_dict = {"BTC_Historical": CoinDeskAPI().get_btc_hist_db_data}
+    DP = DataProcessing()
 
-    # Creating database for data
-    database = BotData(data_dict)
+    # Historical
+    line_generator = DP.bot_d.select_all("BitcoinHistorical")
+    DP.graph_d_h.graph_data(line_generator)
 
-    # Creating moving average
-    moving_avg = MovingAverage(database.select_bh_range, dt.timedelta(days=10000), dt.timedelta(days=100))
+    max_generator = DP.local_max_generator(DP.bot_d.select_all("BitcoinHistorical"))
+    DP.graph_d_h.graph_max(max_generator)
 
-    for i in moving_avg.calculate_simple_moving_average():
-        print(i)
+    min_generator = DP.local_min_generator(DP.bot_d.select_all("BitcoinHistorical"))
+    DP.graph_d_h.graph_min(min_generator)
+
+    # RealTime
+    line_generator = DP.bot_d.select_all("BitcoinRealTime")
+    DP.graph_d_rt.graph_data(line_generator)
+
+    max_generator = DP.local_max_generator(DP.bot_d.select_all("BitcoinRealTime"))
+    DP.graph_d_rt.graph_max(max_generator)
+
+    min_generator = DP.local_min_generator(DP.bot_d.select_all("BitcoinRealTime"))
+    DP.graph_d_rt.graph_min(min_generator)
+
+    while True:
+        data = DP.cd_api.get_btc_price()
+        DP.bot_d.insert("BitcoinRealTime", [data])
+        DP.graph_d_rt.graph_data(DP.bot_d.select_new("BitcoinRealTime"))
+
+        sleep_time = datetime.datetime.now() + datetime.timedelta(seconds=15)
+        while sleep_time > datetime.datetime.now():
+            DP.graph_d_rt.display_graph(0.0001)
+            DP.graph_d_h.display_graph(0.0001)
 
 
 if __name__ == '__main__':
